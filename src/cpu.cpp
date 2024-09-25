@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "cpu.h"
 #include "common.h"
@@ -17,6 +18,7 @@
 
 char* ram;
 char* scratchpad;
+char* biosData;
 
 uint32_t pc, npc;
 uint32_t hi, lo;
@@ -27,8 +29,20 @@ void print_state();
 void init() {
 	ram = (char*) calloc(MEM_SIZE, sizeof(char));
 	scratchpad = (char*) calloc(SCRATCH_SIZE, sizeof(char));
+	biosData = (char*) calloc(BIOS_SIZE, sizeof(char));
 
 	memset(registers, 0, N_REGISTERS * sizeof(uint32_t));
+
+	char biosFile[] = "./SCPH-5501.BIN";
+	FILE* bios = fopen(biosFile, "rn");
+	if (!bios) {
+		fprintf(stderr, "Failed to open bios rom: %s\n", biosFile);
+		exit(-1);
+	}
+
+	int biosSize = fread(biosData, 1, BIOS_SIZE, bios);
+	printf("Read bios file of %d bytes\n", biosSize);
+	fclose(bios);
 }
 
 void incr_pc(size_t incr) {
@@ -52,6 +66,10 @@ uint32_t read_memory(uint32_t address, bool read_word) {
 	// Scratchpad
 	}else if ((address & 0xFFFFFF) >= 0x800000 && (address & 0xFFFFFF) < 0x800400) {
 		return *(uint32_t*)(scratchpad + (address & 0x3FF)) & mask;
+
+	// BIOS
+	}else if ((address & 0xFFFFFF) >= 0xC00000 && (address & 0xFFFFFF) < 0xC80000) {
+		return *(uint32_t*)(biosData + (address & 0x7FFFF)) & mask;
 	}
 
 	printf("uncaught read oooh noooooo %#x\n", address);
@@ -80,6 +98,13 @@ void write_memory(uint32_t address, uint32_t data, bool write_word) {
 			*(uint32_t *)(scratchpad + (address & 0x3FF)) = data;
 		else
 			scratchpad[address & 0x3FF] = data;
+
+	// BIOS
+	}else if (local_addr >= 0xC00000 && local_addr < 0xC80000) {
+		if (write_word)
+			*(uint32_t *)(biosData + (address & 0x7FFFF)) = data;
+		else
+			biosData[address & 0x7FFFF] = data;
 	}else {
 		printf("uncaught write oooh noooooo %#X, data=%#X (%d)\n", address, data, data);
 	}

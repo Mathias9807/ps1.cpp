@@ -8,6 +8,8 @@ typedef size_t reg;
 #define SCRATCH_SIZE (1024)
 #define N_REGISTERS 32
 
+#define BIOS_SIZE (512 * 1024)
+
 extern uint32_t pc, npc;
 extern uint32_t hi, lo;
 extern uint32_t registers[N_REGISTERS];
