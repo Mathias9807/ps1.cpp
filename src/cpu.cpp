@@ -110,11 +110,11 @@ void write_memory(uint32_t address, uint32_t data, bool write_word) {
 	}
 }
 
-void tick() {
+int tick() {
 	// uint32_t instruction = ((uint32_t*) ram)[pc >> 2];
 	uint32_t instruction = read_memory(pc, true);
-	print_word("pc", pc);
-	print_word("executing instruction", instruction);
+	// print_word("pc", pc);
+	// print_word("executing instruction", instruction);
 	// General
 	uint8_t opcode = (instruction >> 26) & 0b111111;
 
@@ -133,6 +133,12 @@ void tick() {
 
 	// J instructions
 	uint32_t address = instruction & 0x0003FFFFFF;
+
+	const char* mnemonic = mnemonics[opcode];
+	if (opcode == 0) mnemonic = secondary_mnems[funct];
+	if (opcode == 1) mnemonic = tertiary_mnems[rt >> 4 | (rt & 1)];
+	if (!instruction) mnemonic = "nop";
+	printf("%#x\t%s r%zu, r%zu, r%zu\n", pc, mnemonic, rs, rt, rd);
 
 	switch (opcode) {
 		case 0b000000: // funct instructions
@@ -294,10 +300,15 @@ void tick() {
 			sw(rt, rs, immediate_s);
 			break;
 		default:
+			print_state();
+			print_word("Unknown instruction D:!", instruction);
+			printf("%#x\t%#x\tmnemonic: %s %zu, %zu, %zu\n", pc, opcode, mnemonic, rs, rt, rd);
 			incr_pc(4);
+			return false;
 	}
 
-	print_state();
+	// print_state();
+	return true;
 }
 
 void destroy() {
@@ -332,29 +343,20 @@ int main() {
 		0b101000'00000'00010'0000000000000000 | 104,
 	};
 
-	pc = 0;
+	pc = 0x1FC00000;
 	npc = pc + 4;
 
 	memcpy(ram, program, sizeof(program) / sizeof(uint32_t));
 	for (int i = 0; i < sizeof(program) / sizeof(uint32_t); i++)
 		((uint32_t*)ram)[i] = (program[i]);
 
-	print_word("ram[0]", ((uint32_t*)ram)[0]);
-	print_word("ram[1]", ((uint32_t*)ram)[1]);
+	int i;
+	for (i = 0; i < 200; i++) {
+		if (tick() == false) break;
+	}
+	printf("%d instructions executed\n", i + 1);
 
-	tick();
-	tick();
-	tick();
-	tick();
-	tick();
-	tick();
-	tick();
-	tick();
-	tick();
-	tick();
-	// tick();
-
-	printf("memory[100] = %s\n", ram + 100);
+	// printf("memory[100] = %s\n", ram + 100);
 
 	print_state();
 

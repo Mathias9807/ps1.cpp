@@ -4,6 +4,32 @@
 #include <cstdint>
 
 
+const char* mnemonics[] = {
+	"special", "b?z", "j", "jal", "beq", "bne", "blez", "bgtz",
+	"addi", "addiu", "slti", "sltiu", "andi", "ori", "xori", "lui",
+	"cop0", "cop1", "cop2", "cop3", "?", "?", "?", "?",
+	"?", "?", "?", "?", "?", "?", "?", "?",
+	"lb", "lh", "lwl", "lw", "lbu", "lhu", "lwr", "?",
+	"sb", "sh", "swl", "sw", "?", "?", "swr", "?",
+	"lwc0", "lwc1", "lwc2", "lwc3", "?", "?", "?", "?",
+	"swc0", "swc1", "swc2", "swc3", "?", "?", "?", "?",
+};
+
+const char* secondary_mnems[] = {
+	"sll", "?", "srl", "sra", "sllv", "?", "srlv", "srav",
+	"jr", "jalr", "?", "?", "syscall", "break", "?", "?",
+	"mfhi", "mthi", "mflo", "mtlo", "?", "?", "?", "?",
+	"mult", "multu", "div", "divu", "?", "?", "?", "?",
+	"add", "addu", "sub", "subu", "and", "or", "xor", "nor",
+	"?", "?", "slt", "sltu", "?", "?", "?", "?",
+	"?", "?", "?", "?", "?", "?", "?", "?",
+	"?", "?", "?", "?", "?", "?", "?", "?",
+};
+
+const char* tertiary_mnems[] = {
+	"bltz", "bgez", "bltzal", "bgezal"
+};
+
 // Math instructions
 void add(reg rd, reg rs, reg rt) {
 	registers[rd] = registers[rs] + registers[rt];
