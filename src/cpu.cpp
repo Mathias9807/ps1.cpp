@@ -6,7 +6,7 @@
 
 #include "cpu.h"
 #include "common.h"
-#include "instructions.h"
+#include "instructions.cpp"
 
 /*
  * Missing:
@@ -23,6 +23,7 @@ char* biosData;
 uint32_t pc, npc;
 uint32_t hi, lo;
 uint32_t registers[N_REGISTERS];
+uint32_t status;
 
 void print_state();
 
@@ -32,6 +33,9 @@ void init() {
 	biosData = (char*) calloc(BIOS_SIZE, sizeof(char));
 
 	memset(registers, 0, N_REGISTERS * sizeof(uint32_t));
+	hi = lo = status = 0;
+	pc = 0x1FC00000;
+	npc = pc + 4;
 
 	char biosFile[] = "./SCPH-5501.BIN";
 	FILE* bios = fopen(biosFile, "rn");
@@ -50,8 +54,8 @@ void incr_pc(size_t incr) {
 	npc += incr;
 }
 
-uint32_t read_memory(uint32_t address, bool read_word) {
-	uint32_t mask = read_word ? ~0 : 0xFF;
+uint32_t read_memory(uint32_t address, int num_bytes) {
+	uint32_t mask = (unsigned) ~0 >> (32 - 8 * num_bytes);
 
 	int mode = -1;
 	if (address >> 24 == 0x00 || address >> 24 == 0x1F) mode = 0;
@@ -60,7 +64,7 @@ uint32_t read_memory(uint32_t address, bool read_word) {
 	if (mode == -1) return 0;
 
 	// Handle physical ram access
-	if ((address & 0xFFFFFF) < 0x200000) {
+	if ((address & 0xFFFFFF) < MEM_SIZE) {
 		return *(uint32_t*)(ram + (address & 0x1FFFFF)) & mask;
 
 	// Scratchpad
@@ -77,7 +81,7 @@ uint32_t read_memory(uint32_t address, bool read_word) {
 	return 0;
 }
 
-void write_memory(uint32_t address, uint32_t data, bool write_word) {
+void write_memory(uint32_t address, uint32_t data, int num_bytes) {
 	int mode = -1;
 	if (address >> 24 == 0x00 || address >> 24 == 0x1F) mode = 0;
 	if (address >> 24 == 0x80 || address >> 24 == 0x9F) mode = 1;
@@ -86,24 +90,30 @@ void write_memory(uint32_t address, uint32_t data, bool write_word) {
 
 	// Handle physical ram access
 	uint32_t local_addr = (address & 0xFFFFFF);
-	if (local_addr < 0x800) {
-		if (write_word)
+	if (local_addr < MEM_SIZE) {
+		if (num_bytes == 4)
 			*(uint32_t *)(ram + (address & 0x1FFFFF)) = data;
-		else
+		else if (num_bytes == 2)
+			*(uint16_t *)(ram + (address & 0x1FFFFF)) = data;
+		else if (num_bytes == 1)
 			ram[address & 0x1FFFFF] = data;
 
 	// Scratchpad
 	}else if (local_addr >= 0x800000 && local_addr < 0x800400) {
-		if (write_word)
+		if (num_bytes == 4)
 			*(uint32_t *)(scratchpad + (address & 0x3FF)) = data;
-		else
+		if (num_bytes == 2)
+			*(uint16_t *)(scratchpad + (address & 0x3FF)) = data;
+		else if (num_bytes == 1)
 			scratchpad[address & 0x3FF] = data;
 
 	// BIOS
 	}else if (local_addr >= 0xC00000 && local_addr < 0xC80000) {
-		if (write_word)
+		if (num_bytes == 4)
 			*(uint32_t *)(biosData + (address & 0x7FFFF)) = data;
-		else
+		if (num_bytes == 2)
+			*(uint16_t *)(biosData + (address & 0x7FFFF)) = data;
+		else if (num_bytes == 1)
 			biosData[address & 0x7FFFF] = data;
 	}else {
 		printf("uncaught write oooh noooooo %#X, data=%#X (%d)\n", address, data, data);
@@ -112,7 +122,7 @@ void write_memory(uint32_t address, uint32_t data, bool write_word) {
 
 int tick() {
 	// uint32_t instruction = ((uint32_t*) ram)[pc >> 2];
-	uint32_t instruction = read_memory(pc, true);
+	uint32_t instruction = read_memory(pc, 4);
 	// print_word("pc", pc);
 	// print_word("executing instruction", instruction);
 	// General
@@ -134,11 +144,10 @@ int tick() {
 	// J instructions
 	uint32_t address = instruction & 0x0003FFFFFF;
 
-	const char* mnemonic = mnemonics[opcode];
-	if (opcode == 0) mnemonic = secondary_mnems[funct];
-	if (opcode == 1) mnemonic = tertiary_mnems[rt >> 4 | (rt & 1)];
-	if (!instruction) mnemonic = "nop";
-	printf("%#x\t%s r%zu, r%zu, r%zu\n", pc, mnemonic, rs, rt, rd);
+	// Co-proc instructions
+	char coproc = opcode & 0b11;
+
+	print_instruction(pc);
 
 	switch (opcode) {
 		case 0b000000: // funct instructions
@@ -225,7 +234,7 @@ int tick() {
 			addi(rt, rs, immediate_s);
 			break;
 		case 0b001001:
-			addiu(rt, rs, immediate_u);
+			addiu(rt, rs, immediate_s);
 			break;
 		case 0b001100:
 			andi(rt, rs, immediate_u);
@@ -287,8 +296,20 @@ int tick() {
 		case 0b001111:
 			lui(rt, immediate_s);
 			break;
+		case 0b010000:
+		case 0b010001:
+		case 0b010010:
+		case 0b010011:
+			if (rs == 0b00100) mtc(coproc, rt, rd);
+			else if (rs == 0b00000) mfc(coproc, rt, rd);
+			else print_word("uncaught coproc instruction", instruction);
+			incr_pc(4);
+			break;
 		case 0b100000:
 			lb(rt, rs, immediate_s);
+			break;
+		case 0b100001:
+			lh(rt, rs, immediate_s);
 			break;
 		case 0b100011:
 			lw(rt, rs, immediate_s);
@@ -296,16 +317,23 @@ int tick() {
 		case 0b101000:
 			sb(rt, rs, immediate_s);
 			break;
+		case 0b101001:
+			sh(rt, rs, immediate_s);
+			break;
 		case 0b101011:
 			sw(rt, rs, immediate_s);
 			break;
 		default:
 			print_state();
 			print_word("Unknown instruction D:!", instruction);
+			const char* mnemonic = get_mnemonic(instruction, opcode);
 			printf("%#x\t%#x\tmnemonic: %s %zu, %zu, %zu\n", pc, opcode, mnemonic, rs, rt, rd);
 			incr_pc(4);
 			return false;
 	}
+
+	// r0 is read-only but that's annoying to implement, just set it to 0 every tick
+	registers[0] = 0;
 
 	// print_state();
 	return true;
@@ -343,15 +371,12 @@ int main() {
 		0b101000'00000'00010'0000000000000000 | 104,
 	};
 
-	pc = 0x1FC00000;
-	npc = pc + 4;
-
 	memcpy(ram, program, sizeof(program) / sizeof(uint32_t));
 	for (int i = 0; i < sizeof(program) / sizeof(uint32_t); i++)
 		((uint32_t*)ram)[i] = (program[i]);
 
 	int i;
-	for (i = 0; i < 200; i++) {
+	for (i = 0; i < 0x4400; i++) {
 		if (tick() == false) break;
 	}
 	printf("%d instructions executed\n", i + 1);
@@ -359,6 +384,9 @@ int main() {
 	// printf("memory[100] = %s\n", ram + 100);
 
 	print_state();
+	printf("size of ins_r: %zu\n", sizeof(ins_r));
+	printf("size of ins_i: %zu\n", sizeof(ins_i));
+	printf("size of ins_j: %zu\n", sizeof(ins_j));
 
 	destroy();
 	return 0;

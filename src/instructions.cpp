@@ -4,44 +4,18 @@
 #include <cstdint>
 
 
-const char* mnemonics[] = {
-	"special", "b?z", "j", "jal", "beq", "bne", "blez", "bgtz",
-	"addi", "addiu", "slti", "sltiu", "andi", "ori", "xori", "lui",
-	"cop0", "cop1", "cop2", "cop3", "?", "?", "?", "?",
-	"?", "?", "?", "?", "?", "?", "?", "?",
-	"lb", "lh", "lwl", "lw", "lbu", "lhu", "lwr", "?",
-	"sb", "sh", "swl", "sw", "?", "?", "swr", "?",
-	"lwc0", "lwc1", "lwc2", "lwc3", "?", "?", "?", "?",
-	"swc0", "swc1", "swc2", "swc3", "?", "?", "?", "?",
-};
-
-const char* secondary_mnems[] = {
-	"sll", "?", "srl", "sra", "sllv", "?", "srlv", "srav",
-	"jr", "jalr", "?", "?", "syscall", "break", "?", "?",
-	"mfhi", "mthi", "mflo", "mtlo", "?", "?", "?", "?",
-	"mult", "multu", "div", "divu", "?", "?", "?", "?",
-	"add", "addu", "sub", "subu", "and", "or", "xor", "nor",
-	"?", "?", "slt", "sltu", "?", "?", "?", "?",
-	"?", "?", "?", "?", "?", "?", "?", "?",
-	"?", "?", "?", "?", "?", "?", "?", "?",
-};
-
-const char* tertiary_mnems[] = {
-	"bltz", "bgez", "bltzal", "bgezal"
-};
-
 // Math instructions
 void add(reg rd, reg rs, reg rt) {
 	registers[rd] = registers[rs] + registers[rt];
 	incr_pc(4);
 }
 
-void addi(reg rt, reg rs, reg imm) {
+void addi(reg rt, reg rs, int32_t imm) {
 	registers[rt] = registers[rs] + imm;
 	incr_pc(4);
 }
 
-void addiu(reg rt, reg rs, reg imm) {
+void addiu(reg rt, reg rs, int16_t imm) {
 	registers[rt] = registers[rs] + imm;
 	incr_pc(4);
 }
@@ -210,22 +184,32 @@ void lui(reg rt, uint32_t imm) {
 }
 
 void lw(reg rt, reg rs, int32_t offset) {
-	registers[rt] = read_memory(registers[rs] + offset, true);
+	registers[rt] = read_memory(registers[rs] + offset, 4);
+	incr_pc(4);
+}
+
+void lh(reg rt, reg rs, int32_t offset) {
+	registers[rt] = read_memory(registers[rs] + offset, 2);
 	incr_pc(4);
 }
 
 void lb(reg rt, reg rs, int32_t offset) {
-	registers[rt] = read_memory(registers[rs] + offset, false);
+	registers[rt] = read_memory(registers[rs] + offset, 1);
 	incr_pc(4);
 }
 
 void sw(reg rt, reg rs, int32_t offset) {
-	write_memory(registers[rs] + offset, registers[rt], true);
+	write_memory(registers[rs] + offset, registers[rt], 4);
+	incr_pc(4);
+}
+
+void sh(reg rt, reg rs, int32_t offset) {
+	write_memory(registers[rs] + offset, registers[rt], 2);
 	incr_pc(4);
 }
 
 void sb(reg rt, reg rs, int32_t offset) {
-	write_memory(registers[rs] + offset, registers[rt], false);
+	write_memory(registers[rs] + offset, registers[rt], 1);
 	incr_pc(4);
 }
 
@@ -272,4 +256,18 @@ void slti(reg rd, reg rs, int32_t imm) {
 void sltiu(reg rd, reg rs, uint32_t imm) {
 	registers[rd] = (signed int) registers[rs] < imm;
 	incr_pc(4);
+}
+
+// Co-processor instructions
+
+void mtc(char coproc, reg rt, reg rd) {
+	if (coproc == 0 && rd == 12) {
+		status = rt;
+	}else printf("Uncaught write to coproc %d, register %zu\n", coproc, rd);
+}
+
+void mfc(char coproc, reg rt, reg rd) {
+	if (coproc == 0 && rd == 12) {
+		rt = status;
+	}else printf("Uncaught read from coproc %d, register %zu\n", coproc, rd);
 }
