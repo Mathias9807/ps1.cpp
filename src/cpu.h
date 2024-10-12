@@ -11,6 +11,8 @@ typedef size_t reg;
 
 #define BIOS_SIZE (512 * 1024)
 
+#define WORK_MEM_SIZE (8 * 1024 * 1024)
+
 #pragma pack(push)
 #pragma pack(1)
 typedef struct {
@@ -36,9 +38,15 @@ typedef struct {
 extern uint32_t pc, npc;
 extern uint32_t hi, lo;
 extern uint32_t registers[N_REGISTERS];
-extern uint32_t status;
+extern uint32_t status, dcic, bpc, bda, bdam, bpc, bpcm, cause;
+extern uint16_t volumeLeft, volumeRight, reverbVolumeLeft, reverbVolumeRight;
+extern uint32_t irq_stat, irq_mask;
+
+#define DCIC_BPC (1 << 24)
+#define DCIC_BDA (1 << 25)
 
 void incr_pc(size_t incr);
 
 uint32_t read_memory(uint32_t address, int num_bytes);
 void write_memory(uint32_t address, uint32_t data, int num_bytes);
+void* find_memory(uint32_t address);

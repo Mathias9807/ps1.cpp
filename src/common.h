@@ -16,3 +16,6 @@ const char* get_mnemonic(uint32_t instruction, uint8_t funct);
 
 void print_word(const char* label, uint32_t i);
 void print_instruction(uint32_t address);
+void print_kernel_call();
+
+void common_exit();

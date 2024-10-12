@@ -10,10 +10,10 @@
 
 /*
  * Missing:
- * sign extend immediates
+ * verify that all load instructions sign extend their values
  * handle overflow on arithmatic (traps)
- * jump delay slot
- * load delay slot
+ * interrupts
+ * load delay slot (might not need to be implemented)
  */
 
 char* ram;
@@ -23,7 +23,16 @@ char* biosData;
 uint32_t pc, npc;
 uint32_t hi, lo;
 uint32_t registers[N_REGISTERS];
-uint32_t status;
+uint32_t status, dcic, bpc, bpcm, bda, bdam, cause;
+uint16_t volumeLeft, volumeRight, reverbVolumeLeft, reverbVolumeRight;
+uint32_t irq_stat, irq_mask;
+
+// I/O
+uint32_t exp1BaseAddr, exp2BaseAddr, exp3BaseAddr = 0x1FA00000;
+uint32_t exp1AccessConfig, exp2AccessConfig, exp3AccessConfig, spuAccessConfig, cdromAccessConfig;
+uint32_t biuConfig; // Controls scratchpads and if load/stores goes to memory or cache
+
+long tick_count = 0;
 
 void print_state();
 
@@ -36,6 +45,7 @@ void init() {
 	hi = lo = status = 0;
 	pc = 0x1FC00000;
 	npc = pc + 4;
+	status = dcic = bpc = bpcm = bda = bdam = cause = 0;
 
 	char biosFile[] = "./SCPH-5501.BIN";
 	FILE* bios = fopen(biosFile, "rn");
@@ -57,6 +67,18 @@ void incr_pc(size_t incr) {
 uint32_t read_memory(uint32_t address, int num_bytes) {
 	uint32_t mask = (unsigned) ~0 >> (32 - 8 * num_bytes);
 
+	// if ((address & 0xFFFFF) == 0x109b0) {
+	// 	printf("Read from %#x\n", address);
+	// 	printf("ticks: %ld\n", tick_count);
+	// 	exit(-1);
+	// }
+
+	// BPA Break handling
+	if (dcic & DCIC_BDA && ((address ^ bda) & bdam) == 0) {
+		printf("BDA Break encountered, unimplemented!\n");
+		exit(-1);
+	}
+
 	int mode = -1;
 	if (address >> 24 == 0x00 || address >> 24 == 0x1F) mode = 0;
 	if (address >> 24 == 0x80 || address >> 24 == 0x9F) mode = 1;
@@ -64,7 +86,7 @@ uint32_t read_memory(uint32_t address, int num_bytes) {
 	if (mode == -1) return 0;
 
 	// Handle physical ram access
-	if ((address & 0xFFFFFF) < MEM_SIZE) {
+	if ((address & 0xFFFFFF) < WORK_MEM_SIZE) {
 		return *(uint32_t*)(ram + (address & 0x1FFFFF)) & mask;
 
 	// Scratchpad
@@ -77,20 +99,39 @@ uint32_t read_memory(uint32_t address, int num_bytes) {
 	}
 
 	printf("uncaught read oooh noooooo %#x\n", address);
+	exit(-1);
 
 	return 0;
 }
 
 void write_memory(uint32_t address, uint32_t data, int num_bytes) {
+	// Ignore all writes when Isolate Cache is high
+	if (status & (1 << 16)) return;
+
 	int mode = -1;
 	if (address >> 24 == 0x00 || address >> 24 == 0x1F) mode = 0;
 	if (address >> 24 == 0x80 || address >> 24 == 0x9F) mode = 1;
 	if (address >> 24 == 0xA0 || address >> 24 == 0xBF) mode = 2;
-	if (mode == -1) return;
+	if (mode == -1) {
+		if (address == 0xFFFE0130) {
+			printf("Cache control write: %#x\n", data);
+			biuConfig = data;
+			return;
+		}else {
+			printf("Write to unknown address space: %#x, data %#x\n", address, data);
+			exit(-1);
+		}
+	}
+
+	// BPA Break handling
+	if (dcic & DCIC_BDA && ((address ^ bda) & bdam) == 0) {
+		printf("BDA Break encountered, unimplemented!\n");
+		exit(-1);
+	}
 
 	// Handle physical ram access
 	uint32_t local_addr = (address & 0xFFFFFF);
-	if (local_addr < MEM_SIZE) {
+	if (local_addr < WORK_MEM_SIZE) {
 		if (num_bytes == 4)
 			*(uint32_t *)(ram + (address & 0x1FFFFF)) = data;
 		else if (num_bytes == 2)
@@ -115,9 +156,108 @@ void write_memory(uint32_t address, uint32_t data, int num_bytes) {
 			*(uint16_t *)(biosData + (address & 0x7FFFF)) = data;
 		else if (num_bytes == 1)
 			biosData[address & 0x7FFFF] = data;
+
+	}else if (local_addr == 0x801010) {
+		printf("Ignoring BIOS ROM Delay/Size set: %#x\n", data);
+
+	}else if (local_addr == 0x801060) {
+		// Bit 7: Delay on simultaneous CODE+DATA fetch from RAM
+		// Bits 9-11: Define 8MB memory window
+		printf("Ignoring RAM access and memory space configuration: %#x\n", data);
+
+	}else if (local_addr == 0x801020) {
+		printf("Ignoring COMMON_DELAY configuration: %#x\n", data);
+
+	}else if (local_addr == 0x801000 && num_bytes == 4) {
+		printf("Setting expansion port 1 base address: %#x\n", data);
+		exp1BaseAddr = data;
+
+	}else if (local_addr == 0x801004 && num_bytes == 4) {
+		printf("Setting expansion port 2 base address: %#x\n", data);
+		exp2BaseAddr = data;
+
+	}else if (local_addr == 0x801008 && num_bytes == 4) {
+		printf("Configuring expansion port 1 accesses: %#x\n", data);
+		exp1AccessConfig = data;
+
+	}else if (local_addr == 0x80101C && num_bytes == 4) {
+		printf("Configuring expansion port 2 accesses: %#x\n", data);
+		exp2AccessConfig = data;
+
+	}else if (local_addr == 0x80100C && num_bytes == 4) {
+		printf("Configuring expansion port 3 accesses: %#x\n", data);
+		exp3AccessConfig = data;
+
+	}else if (local_addr == 0x801014 && num_bytes == 4) {
+		printf("Configuring SPU accesses: %#x\n", data);
+		spuAccessConfig = data;
+
+	}else if (local_addr == 0x801018 && num_bytes == 4) {
+		printf("Configuring CD-ROM accesses: %#x\n", data);
+		cdromAccessConfig = data;
+
+	}else if (local_addr == 0x801D80 && num_bytes == 2) {
+		volumeLeft = data & 0xFFFF;
+		printf("Setting volume: %#x, %#x\n", volumeLeft, volumeRight);
+
+	}else if (local_addr == 0x801D82 && num_bytes == 2) {
+		volumeRight = data & 0xFFFF;
+		printf("Setting volume: %#x, %#x\n", volumeLeft, volumeRight);
+
+	}else if (local_addr == 0x801D80 && num_bytes == 4) {
+		volumeLeft = data & 0xFFFF;
+		volumeRight = data >> 16;
+		printf("Setting volume: %#x, %#x\n", volumeLeft, volumeRight);
+
+	}else if (local_addr == 0x801D84 && num_bytes == 2) {
+		reverbVolumeLeft = data & 0xFFFF;
+		printf("Setting reverb volume: %#x, %#x\n", reverbVolumeLeft, reverbVolumeRight);
+
+	}else if (local_addr == 0x801D86 && num_bytes == 2) {
+		reverbVolumeRight = data & 0xFFFF;
+		printf("Setting reverb volume: %#x, %#x\n", reverbVolumeLeft, reverbVolumeRight);
+
+	}else if (local_addr == 0x802041 && num_bytes == 1) {
+		printf("POST Boot status: %d\n", data);
+		// exit(-1);
+
+	}else if (local_addr == 0x801074 && num_bytes == 4) {
+		irq_mask = data;
+		if (data != 0) {
+			printf("Tried to enable interrupts, exiting\n");
+			exit(-1);
+		}
+
+	}else if (local_addr == 0x801070) {
+		if (data == 0) irq_stat = 0;
+
 	}else {
 		printf("uncaught write oooh noooooo %#X, data=%#X (%d)\n", address, data, data);
+		exit(-1);
 	}
+}
+
+void* find_memory(uint32_t address) {
+	int mode = -1;
+	if (address >> 24 == 0x00 || address >> 24 == 0x1F) mode = 0;
+	if (address >> 24 == 0x80 || address >> 24 == 0x9F) mode = 1;
+	if (address >> 24 == 0xA0 || address >> 24 == 0xBF) mode = 2;
+	if (mode == -1) return 0;
+
+	// Handle physical ram access
+	if ((address & 0xFFFFFF) < WORK_MEM_SIZE) {
+		return (uint32_t*)(ram + (address & 0x1FFFFF));
+
+	// Scratchpad
+	}else if ((address & 0xFFFFFF) >= 0x800000 && (address & 0xFFFFFF) < 0x800400) {
+		return (uint32_t*)(scratchpad + (address & 0x3FF));
+
+	// BIOS
+	}else if ((address & 0xFFFFFF) >= 0xC00000 && (address & 0xFFFFFF) < 0xC80000) {
+		return (uint32_t*)(biosData + (address & 0x7FFFF));
+	}
+
+	return NULL;
 }
 
 int tick() {
@@ -147,7 +287,17 @@ int tick() {
 	// Co-proc instructions
 	char coproc = opcode & 0b11;
 
-	print_instruction(pc);
+	if (tick_count > 101398) print_instruction(pc);
+
+	// BPA Break handling
+	if (dcic & DCIC_BPC && ((address ^ bpc) & bpcm) == 0) {
+		printf("BPC Break encountered, unimplemented!\n");
+		exit(-1);
+	}
+
+	// Catch kernel calls and print info
+	if (pc == 0xA0 || pc == 0xB0 || pc == 0xC0)
+		print_kernel_call();
 
 	switch (opcode) {
 		case 0b000000: // funct instructions
@@ -172,8 +322,12 @@ int tick() {
 			case 0b001000:
 				jr(rs);
 				break;
-			case 0b001100:
-				syscall();
+			// case 0b001100:
+			// 	syscall();
+			// 	break;
+			case 0b001101:
+				printf("break\n");
+				exit(-1);
 				break;
 			case 0b010000:
 				mfhi(rd);
@@ -288,7 +442,7 @@ int tick() {
 			slti(rt, rs, immediate_s);
 			break;
 		case 0b001011:
-			sltiu(rt, rs, immediate_u);
+			sltiu(rt, rs, immediate_s);
 			break;
 		case 0b001101:
 			ori(rt, rs, immediate_s);
@@ -314,6 +468,9 @@ int tick() {
 		case 0b100011:
 			lw(rt, rs, immediate_s);
 			break;
+		case 0b100100:
+			lbu(rt, rs, immediate_s);
+			break;
 		case 0b101000:
 			sb(rt, rs, immediate_s);
 			break;
@@ -335,6 +492,8 @@ int tick() {
 	// r0 is read-only but that's annoying to implement, just set it to 0 every tick
 	registers[0] = 0;
 
+	tick_count++;
+
 	// print_state();
 	return true;
 }
@@ -350,7 +509,7 @@ void print_state() {
 		printf("r%-2d = %d\t", r, registers[r]);
 		if (i % 8 == 7) printf("\n");
 	}
-	printf("\nPC: %d\tnPC: %d\n", pc, npc);
+	printf("PC: %#x\tnPC: %#x\n\n", pc, npc);
 }
 
 int main() {
@@ -376,17 +535,35 @@ int main() {
 		((uint32_t*)ram)[i] = (program[i]);
 
 	int i;
-	for (i = 0; i < 0x4400; i++) {
+	for (i = 0; i < 120000; i++) {
 		if (tick() == false) break;
+
+		// if ((pc & 0xFFFF) == 0xda0) {
+		// 	printf("hit printf(?). %s, %02x\n", (char*) find_memory(registers[5]), registers[6]);
+		// 	printf("num instructions executed: %d\n", tick_count);
+		// 	print_state();
+		// }
 	}
 	printf("%d instructions executed\n", i + 1);
 
 	// printf("memory[100] = %s\n", ram + 100);
 
-	print_state();
-	printf("size of ins_r: %zu\n", sizeof(ins_r));
-	printf("size of ins_i: %zu\n", sizeof(ins_i));
-	printf("size of ins_j: %zu\n", sizeof(ins_j));
+	// pc = 0xA0;
+	// npc = pc + 4;
+	// registers[9] = 0x3B;
+	// registers[4] = 'C';
+	// registers[5] = 'C';
+	// registers[6] = 'C';
+	// registers[7] = 'C';
+	// registers[31] = 0xFFFFFFFF;
+	// for (int i = 0; i < 10000; i++) tick();
+
+	// print_state();
+	// printf("size of ins_r: %zu\n", sizeof(ins_r));
+	// printf("size of ins_i: %zu\n", sizeof(ins_i));
+	// printf("size of ins_j: %zu\n", sizeof(ins_j));
+
+	common_exit();
 
 	destroy();
 	return 0;
