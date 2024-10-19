@@ -206,6 +206,24 @@ void print_kernel_call() {
 		if (func.param_5) printf(", %s", func.param_5);
 		printf(")\n");
 	}
+
+	if (pc == 0xC0) {
+		kernel_func_t func = kernel_c_funcs[registers[9]];
+
+		printf("Kernel call: %s(", func.func_name);
+		if (func.param_1) printf("%s", func.param_1);
+
+		uint32_t p_1 = registers[4];
+		uint32_t p_2 = registers[5];
+		if (func.param_1_type == KERNEL_TYPE_STRING && find_memory(p_1)) printf("=\"%s\"", (char*) find_memory(p_1));
+		if (func.param_1_type == KERNEL_TYPE_CHAR) printf("=\"%c\"", p_1);
+		if (func.param_2) printf(", %s", func.param_2);
+		if (func.param_2_type == KERNEL_TYPE_STRING && find_memory(p_2)) printf("=\"%s\"", (char*) find_memory(p_2));
+		if (func.param_3) printf(", %s", func.param_3);
+		if (func.param_4) printf(", %s", func.param_4);
+		if (func.param_5) printf(", %s", func.param_5);
+		printf(")\n");
+	}
 }
 
 void common_exit() {

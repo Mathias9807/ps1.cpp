@@ -23,3 +23,4 @@ typedef struct {
 
 extern kernel_func_t kernel_a_funcs[];
 extern kernel_func_t kernel_b_funcs[];
+extern kernel_func_t kernel_c_funcs[];

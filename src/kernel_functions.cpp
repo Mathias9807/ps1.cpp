@@ -242,3 +242,37 @@ kernel_func_t kernel_b_funcs[] = {
 	{ "PrintInstalledDevices" },
 };
 
+kernel_func_t kernel_c_funcs[] = {
+	{ "EnqueueTimerAndVblankIrqs", KERNEL_TYPE_NONE, "priority" }, // used with prio=1
+	{ "EnqueueSyscallHandler", KERNEL_TYPE_NONE, "priority" },     // used with prio=0
+	{ "SysEnqIntRP", KERNEL_TYPE_NONE, "priority", KERNEL_TYPE_NONE, "struc" },  // bugged, use with care
+	{ "SysDeqIntRP", KERNEL_TYPE_NONE, "priority", KERNEL_TYPE_NONE, "struc" },  // bugged, use with care
+	{ "get_free_EvCB_slot" },
+	{ "get_free_TCB_slot" },
+	{ "ExceptionHandler" },
+	{ "InstallExceptionHandlers" },  // destroys/uses k0/k1
+	{ "SysInitMemory", KERNEL_TYPE_NONE, "addr", KERNEL_TYPE_NONE, "size" },
+	{ "SysInitKernelVariables" },
+	{ "ChangeClearRCnt", KERNEL_TYPE_NONE, "t", KERNEL_TYPE_NONE, "flag" },
+	{ "SystemError" },   // PS2: return 0
+	{ "InitDefInt", KERNEL_TYPE_NONE, "priority" }, // used with prio=3
+	{ "SetIrqAutoAck", KERNEL_TYPE_NONE, "irq", KERNEL_TYPE_NONE, "flag" },
+	{ "no_func" },               // DTL-H2000: dev_sio_init
+	{ "no_func" },               // DTL-H2000: dev_sio_open
+	{ "no_func" },               // DTL-H2000: dev_sio_in_out
+	{ "no_func" },               // DTL-H2000: dev_sio_ioctl
+	{ "InstallDevices", KERNEL_TYPE_NONE, "ttyflag" },
+	{ "FlushStdInOutPut" },
+	{ "no_func" },               // DTL-H2000: SystemError
+	{ "_cdevinput", KERNEL_TYPE_NONE, "circ", KERNEL_TYPE_NONE, "char" },
+	{ "_cdevscan" },
+	{ "_circgetc", KERNEL_TYPE_NONE, "circ" },    // uses r5 as garbage txt for _ioabort
+	{ "_circputc", KERNEL_TYPE_NONE, "char", KERNEL_TYPE_NONE, "circ" },
+	{ "_ioabort", KERNEL_TYPE_NONE, "txt1", KERNEL_TYPE_NONE, "txt2" },
+	{ "set_card_find_mode", KERNEL_TYPE_NONE, "mode" },  // 0=normal, 1=find deleted files
+	{ "KernelRedirect", KERNEL_TYPE_NONE, "ttyflag" },   // PS2: ttyflag=1 causes SystemError
+	{ "AdjustA0Table" },
+	{ "get_card_find_mode" },
+	{ "no_func" },
+};
+
