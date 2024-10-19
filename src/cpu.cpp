@@ -33,6 +33,7 @@ uint32_t exp1AccessConfig, exp2AccessConfig, exp3AccessConfig, spuAccessConfig, 
 uint32_t biuConfig; // Controls scratchpads and if load/stores goes to memory or cache
 
 long tick_count = 0;
+bool quit = false;
 
 void print_state();
 
@@ -118,7 +119,7 @@ uint32_t read_memory(uint32_t address, int num_bytes) {
 
 
 	printf("uncaught read oooh noooooo %#x\n", address);
-	exit(-1);
+	quit = true;
 
 	return 0;
 }
@@ -138,14 +139,14 @@ void write_memory(uint32_t address, uint32_t data, int num_bytes) {
 			return;
 		}else {
 			printf("Write to unknown address space: %#x, data %#x\n", address, data);
-			exit(-1);
+			quit = true;
 		}
 	}
 
 	// BPA Break handling
 	if (dcic & DCIC_BDA && ((address ^ bda) & bdam) == 0) {
 		printf("BDA Break encountered, unimplemented!\n");
-		exit(-1);
+		quit = true;
 	}
 
 	// Handle physical ram access
@@ -244,7 +245,7 @@ void write_memory(uint32_t address, uint32_t data, int num_bytes) {
 		irq_mask = data;
 		if (data != 0) {
 			printf("Tried to enable interrupts, exiting\n");
-			exit(-1);
+			quit = true;
 		}
 
 	}else if (local_addr == 0x801070) {
@@ -263,7 +264,7 @@ void write_memory(uint32_t address, uint32_t data, int num_bytes) {
 
 	}else {
 		printf("uncaught write oooh noooooo %#x, data=%#x (%d)\n", address, data, data);
-		exit(-1);
+		quit = true;
 	}
 }
 
@@ -566,8 +567,8 @@ int main() {
 		((uint32_t*)ram)[i] = (program[i]);
 
 	int i;
-	for (i = 0; i < 120000; i++) {
-		if (tick() == false) break;
+	for (i = 0; i < 5000000; i++) {
+		if (tick() == false || quit) break;
 
 		// if ((pc & 0xFFFF) == 0xda0) {
 		// 	printf("hit printf(?). %s, %02x\n", (char*) find_memory(registers[5]), registers[6]);
