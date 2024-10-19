@@ -86,6 +86,7 @@ uint32_t read_memory(uint32_t address, int num_bytes) {
 	if (mode == -1) return 0;
 
 	// Handle physical ram access
+	uint32_t local_addr = address & 0xFFFFFF;
 	if ((address & 0xFFFFFF) < WORK_MEM_SIZE) {
 		return *(uint32_t*)(ram + (address & 0x1FFFFF)) & mask;
 
@@ -96,7 +97,25 @@ uint32_t read_memory(uint32_t address, int num_bytes) {
 	// BIOS
 	}else if ((address & 0xFFFFFF) >= 0xC00000 && (address & 0xFFFFFF) < 0xC80000) {
 		return *(uint32_t*)(biosData + (address & 0x7FFFF)) & mask;
+
+	}else if ((address & 0xFFFFFF) == 0x801074 && num_bytes == 4) {
+		return irq_mask;
+
+	}else if ((local_addr == 0x801100 || local_addr == 0x801110 || local_addr == 0x801120)
+			&& num_bytes == 4) {
+		return timer_counter[local_addr / 0x10 & 0x3];
+
+	}else if ((local_addr == 0x801108 || local_addr == 0x801118 || local_addr == 0x801128)
+			&& num_bytes == 4) {
+		int timer = local_addr / 0x10 & 0x3;
+		return timer_target[timer];
+
+	}else if ((local_addr == 0x801104 || local_addr == 0x801114 || local_addr == 0x801124)
+			&& num_bytes == 4) {
+		int timer = local_addr / 0x10 & 0x3;
+		return get_timer_mode(timer);
 	}
+
 
 	printf("uncaught read oooh noooooo %#x\n", address);
 	exit(-1);
@@ -231,8 +250,19 @@ void write_memory(uint32_t address, uint32_t data, int num_bytes) {
 	}else if (local_addr == 0x801070) {
 		if (data == 0) irq_stat = 0;
 
+	}else if (local_addr == 0x801100 || local_addr == 0x801110 || local_addr == 0x801120) {
+		printf("TIMER: Setting timer counter %d to %d\n", local_addr / 0x10 & 0x3, data);
+		timer_counter[local_addr / 0x10 & 0x3] = data;
+
+	}else if (local_addr == 0x801104 || local_addr == 0x801114 || local_addr == 0x801124) {
+		set_timer_mode(local_addr / 0x10 & 0x3, data);
+
+	}else if (local_addr == 0x801108 || local_addr == 0x801118 || local_addr == 0x801128) {
+		printf("TIMER: Setting target %d to %d\n", local_addr / 0x10 & 0x3, data);
+		timer_target[local_addr / 0x10 & 0x3] = data;
+
 	}else {
-		printf("uncaught write oooh noooooo %#X, data=%#X (%d)\n", address, data, data);
+		printf("uncaught write oooh noooooo %#x, data=%#x (%d)\n", address, data, data);
 		exit(-1);
 	}
 }
@@ -287,7 +317,7 @@ int tick() {
 	// Co-proc instructions
 	char coproc = opcode & 0b11;
 
-	if (tick_count > 101398) print_instruction(pc);
+	if (tick_count > 101398 + 0x11111111) print_instruction(pc);
 
 	// BPA Break handling
 	if (dcic & DCIC_BPC && ((address ^ bpc) & bpcm) == 0) {
@@ -492,6 +522,7 @@ int tick() {
 	// r0 is read-only but that's annoying to implement, just set it to 0 every tick
 	registers[0] = 0;
 
+	on_tick();
 	tick_count++;
 
 	// print_state();
