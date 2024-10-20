@@ -54,6 +54,27 @@ uint32_t to_be(uint32_t i) {
 	return __builtin_bswap32(i);
 }
 
+/** djb2 hash function: http://www.cse.yorku.ca/~oz/hash.html */
+uint64_t hash_str(const char* str) {
+	uint64_t hash = 5381;
+        int c;
+
+        while ((c = *str++))
+            hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+
+        return hash;
+}
+
+/** djb2 hash function: http://www.cse.yorku.ca/~oz/hash.html */
+uint64_t hash_buffer(const char* data, size_t len) {
+	uint64_t hash = 5381;
+
+        for (const char* c_ptr = data; c_ptr < data + len; c_ptr++)
+            hash = ((hash << 5) + hash) + *c_ptr; /* hash * 33 + c */
+
+        return hash;
+}
+
 void print_word(const char* label, uint32_t i) {
 	printf("WORD %s: 0b" BYTE_TO_BINARY_PATTERN BYTE_TO_BINARY_PATTERN BYTE_TO_BINARY_PATTERN BYTE_TO_BINARY_PATTERN"\n", label, BYTE_TO_BINARY(i >> 24), BYTE_TO_BINARY(i >> 16), BYTE_TO_BINARY(i >> 8), BYTE_TO_BINARY(i));
 }

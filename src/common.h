@@ -18,4 +18,7 @@ void print_word(const char* label, uint32_t i);
 void print_instruction(uint32_t address);
 void print_kernel_call();
 
+uint64_t hash_str(const char* str);
+uint64_t hash_buffer(const char* data, size_t len);
+
 void common_exit();

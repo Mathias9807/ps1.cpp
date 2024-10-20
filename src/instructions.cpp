@@ -236,6 +236,8 @@ void sb(reg rt, reg rs, int32_t offset) {
 // Misc
 void syscall() {
 	cause = (cause & ~0b11111100) | (8 << 2);
+	printf("syscall\n");
+	quit = 1;
 	incr_pc(4);
 }
 

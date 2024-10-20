@@ -35,8 +35,6 @@ uint32_t biuConfig; // Controls scratchpads and if load/stores goes to memory or
 long tick_count = 0;
 bool quit = false;
 
-void print_state();
-
 void init() {
 	ram = (char*) calloc(MEM_SIZE, sizeof(char));
 	scratchpad = (char*) calloc(SCRATCH_SIZE, sizeof(char));
@@ -566,14 +564,19 @@ int main() {
 	for (int i = 0; i < sizeof(program) / sizeof(uint32_t); i++)
 		((uint32_t*)ram)[i] = (program[i]);
 
+	int test = 0;
 	int i;
-	for (i = 0; i < 5000000; i++) {
-		if (tick() == false || quit) break;
+	for (i = 0; i < 200000; i++) {
+		if (try_xlr8()) {
 
-		// if ((pc & 0xFFFF) == 0xda0) {
-		// 	printf("hit printf(?). %s, %02x\n", (char*) find_memory(registers[5]), registers[6]);
-		// 	printf("num instructions executed: %d\n", tick_count);
+		}else if ((tick() == false && test-- == 0) || quit) break;
+
+		// if ((pc & 0xFFFF) == 0x3c90) {
+		// 	printf("hit return from memcpy. %#x, %#x, %#x\n", registers[4], registers[5], registers[6]);
+		// 	printf("num instructions executed: %ld\n", tick_count);
 		// 	print_state();
+		// 	printf("Hash of RAM: %#lx\n", hash_buffer(ram, MEM_SIZE));
+		// 	quit = true;
 		// }
 	}
 	printf("%d instructions executed\n", i + 1);
