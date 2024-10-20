@@ -187,6 +187,7 @@ void print_kernel_call() {
 		uint32_t p_1 = registers[4];
 		uint32_t p_2 = registers[5];
 		if (func.param_1_type == KERNEL_TYPE_STRING && find_memory(p_1)) printf("=\"%s\"", (char*) find_memory(p_1));
+		if (func.param_1_type == KERNEL_TYPE_CHAR) printf("=\"%c\"", p_1);
 		if (func.param_2) printf(", %s", func.param_2);
 		if (func.param_2_type == KERNEL_TYPE_STRING && find_memory(p_2)) printf("=\"%s\"", (char*) find_memory(p_2));
 		if (func.param_3) printf(", %s", func.param_3);
