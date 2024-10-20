@@ -102,6 +102,12 @@ void print_instruction(uint32_t address) {
 		case 0b001000: // <ins> rs instructions
 			printf("%#x\t%s r%d\n", pc, mnemonic, ir.rs);
 			return;
+		case 0b001001: // special jalr register (rd is implied to be r31 if unspecified)
+			if (ir.rd == 31)
+				printf("%#x\t%s r%d\n", pc, mnemonic, ir.rs);
+			else
+				printf("%#x\t%s r%d r%d\n", pc, mnemonic, ir.rd, ir.rs);
+			return;
 		case 0b000000: // <ins> rd rt sa instructions
 			printf("%#x\t%s r%d, r%d, %d\n", pc, mnemonic, ir.rd, ir.rt, ir.shamt);
 			return;
