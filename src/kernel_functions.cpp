@@ -45,7 +45,7 @@ kernel_func_t kernel_a_funcs[] = {
 	{ "bcopy", KERNEL_TYPE_NONE, "src", KERNEL_TYPE_NONE, "dst", KERNEL_TYPE_NONE, "len" },
 	{ "bzero", KERNEL_TYPE_NONE, "dst", KERNEL_TYPE_NONE, "len" },
 	{ "bcmp", KERNEL_TYPE_NONE, "ptr1", KERNEL_TYPE_NONE, "ptr2", KERNEL_TYPE_NONE, "len" },      // Bugged
-	{ "memcpy", KERNEL_TYPE_NONE, "dst", KERNEL_TYPE_NONE, "src", KERNEL_TYPE_NONE, "len" },
+	{ "memcpy", KERNEL_TYPE_PTR, "dst", KERNEL_TYPE_PTR, "src", KERNEL_TYPE_INT, "len" },
 	{ "memset", KERNEL_TYPE_NONE, "dst", KERNEL_TYPE_NONE, "fillbyte", KERNEL_TYPE_NONE, "len" },
 	{ "memmove", KERNEL_TYPE_NONE, "dst", KERNEL_TYPE_NONE, "src", KERNEL_TYPE_NONE, "len" },     // Bugged
 	{ "memcmp", KERNEL_TYPE_NONE, "src1", KERNEL_TYPE_NONE, "src2", KERNEL_TYPE_NONE, "len" },    // Bugged

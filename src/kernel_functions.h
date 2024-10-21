@@ -5,6 +5,7 @@ enum kernel_func_param_type {
 	KERNEL_TYPE_INT,
 	KERNEL_TYPE_CHAR,
 	KERNEL_TYPE_STRING,
+	KERNEL_TYPE_PTR,
 };
 
 typedef struct {

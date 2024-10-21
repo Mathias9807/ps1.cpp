@@ -207,11 +207,20 @@ void print_kernel_call() {
 
 		uint32_t p_1 = registers[4];
 		uint32_t p_2 = registers[5];
+		uint32_t p_3 = registers[6];
 		if (func.param_1_type == KERNEL_TYPE_STRING && find_memory(p_1)) printf("=\"%s\"", (char*) find_memory(p_1));
 		if (func.param_1_type == KERNEL_TYPE_CHAR) printf("=\"%c\"", p_1);
+		if (func.param_1_type == KERNEL_TYPE_PTR) printf("=%#x", p_1);
+
 		if (func.param_2) printf(", %s", func.param_2);
 		if (func.param_2_type == KERNEL_TYPE_STRING && find_memory(p_2)) printf("=\"%s\"", (char*) find_memory(p_2));
+		if (func.param_2_type == KERNEL_TYPE_CHAR) printf("=\"%c\"", p_2);
+		if (func.param_2_type == KERNEL_TYPE_PTR) printf("=%#x", p_2);
+
 		if (func.param_3) printf(", %s", func.param_3);
+		if (func.param_3_type == KERNEL_TYPE_CHAR) printf("=\"%c\"", p_3);
+		if (func.param_3_type == KERNEL_TYPE_INT) printf("=%d", p_3);
+
 		if (func.param_4) printf(", %s", func.param_4);
 		if (func.param_5) printf(", %s", func.param_5);
 		printf(")\n");
@@ -225,11 +234,20 @@ void print_kernel_call() {
 
 		uint32_t p_1 = registers[4];
 		uint32_t p_2 = registers[5];
+		uint32_t p_3 = registers[6];
 		if (func.param_1_type == KERNEL_TYPE_STRING && find_memory(p_1)) printf("=\"%s\"", (char*) find_memory(p_1));
 		if (func.param_1_type == KERNEL_TYPE_CHAR) printf("=\"%c\"", p_1);
+		if (func.param_1_type == KERNEL_TYPE_PTR) printf("=%#x", p_1);
+
 		if (func.param_2) printf(", %s", func.param_2);
 		if (func.param_2_type == KERNEL_TYPE_STRING && find_memory(p_2)) printf("=\"%s\"", (char*) find_memory(p_2));
+		if (func.param_2_type == KERNEL_TYPE_CHAR) printf("=\"%c\"", p_2);
+		if (func.param_2_type == KERNEL_TYPE_PTR) printf("=%#x", p_2);
+
 		if (func.param_3) printf(", %s", func.param_3);
+		if (func.param_3_type == KERNEL_TYPE_CHAR) printf("=\"%c\"", p_3);
+		if (func.param_3_type == KERNEL_TYPE_INT) printf("=%d", p_3);
+
 		if (func.param_4) printf(", %s", func.param_4);
 		if (func.param_5) printf(", %s", func.param_5);
 		printf(")\n");
@@ -243,11 +261,20 @@ void print_kernel_call() {
 
 		uint32_t p_1 = registers[4];
 		uint32_t p_2 = registers[5];
+		uint32_t p_3 = registers[6];
 		if (func.param_1_type == KERNEL_TYPE_STRING && find_memory(p_1)) printf("=\"%s\"", (char*) find_memory(p_1));
 		if (func.param_1_type == KERNEL_TYPE_CHAR) printf("=\"%c\"", p_1);
+		if (func.param_1_type == KERNEL_TYPE_PTR) printf("=%#x", p_1);
+
 		if (func.param_2) printf(", %s", func.param_2);
 		if (func.param_2_type == KERNEL_TYPE_STRING && find_memory(p_2)) printf("=\"%s\"", (char*) find_memory(p_2));
+		if (func.param_2_type == KERNEL_TYPE_CHAR) printf("=\"%c\"", p_2);
+		if (func.param_2_type == KERNEL_TYPE_PTR) printf("=%#x", p_2);
+
 		if (func.param_3) printf(", %s", func.param_3);
+		if (func.param_3_type == KERNEL_TYPE_CHAR) printf("=\"%c\"", p_3);
+		if (func.param_3_type == KERNEL_TYPE_INT) printf("=%d", p_3);
+
 		if (func.param_4) printf(", %s", func.param_4);
 		if (func.param_5) printf(", %s", func.param_5);
 		printf(")\n");
