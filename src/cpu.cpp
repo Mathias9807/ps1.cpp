@@ -289,6 +289,8 @@ void* find_memory(uint32_t address) {
 	return NULL;
 }
 
+void catch_unknown_ins(uint32_t instruction);
+
 int tick() {
 	// uint32_t instruction = ((uint32_t*) ram)[pc >> 2];
 	uint32_t instruction = read_memory(pc, 4);
@@ -351,6 +353,9 @@ int tick() {
 			case 0b001000:
 				jr(rs);
 				break;
+			case 0b001001:
+				jalr(rd, rs);
+				break;
 			// case 0b001100:
 			// 	syscall();
 			// 	break;
@@ -404,7 +409,9 @@ int tick() {
 				sltu(rd, rs, rt);
 				break;
 			default:
+				catch_unknown_ins(instruction);
 				incr_pc(4);
+				return false;
 			}
 			break;
 		case 0b000010:
@@ -446,7 +453,9 @@ int tick() {
 				bgezal(rs, immediate_s);
 				break;
 			default:
+				catch_unknown_ins(instruction);
 				incr_pc(4);
+				return false;
 			}
 			break;
 		case 0b000111:
@@ -455,7 +464,9 @@ int tick() {
 				bgtz(rs, immediate_s);
 				break;
 			default:
+				catch_unknown_ins(instruction);
 				incr_pc(4);
+				return false;
 			}
 			break;
 		case 0b000110:
@@ -464,7 +475,9 @@ int tick() {
 				blez(rs, immediate_s);
 				break;
 			default:
+				catch_unknown_ins(instruction);
 				incr_pc(4);
+				return false;
 			}
 			break;
 		case 0b001010:
@@ -510,10 +523,7 @@ int tick() {
 			sw(rt, rs, immediate_s);
 			break;
 		default:
-			print_state();
-			print_word("Unknown instruction D:!", instruction);
-			const char* mnemonic = get_mnemonic(instruction, opcode);
-			printf("%#x\t%#x\tmnemonic: %s %zu, %zu, %zu\n", pc, opcode, mnemonic, rs, rt, rd);
+			catch_unknown_ins(instruction);
 			incr_pc(4);
 			return false;
 	}
@@ -526,6 +536,14 @@ int tick() {
 
 	// print_state();
 	return true;
+}
+
+void catch_unknown_ins(uint32_t instruction) {
+	ins_r ir = *(ins_r*) &instruction;
+	print_state();
+	print_word("Unknown instruction D:!", instruction);
+	const char* mnemonic = get_mnemonic(instruction, ir.funct);
+	printf("%#x\t%#x\tmnemonic: %s %d, %d, %d\n", pc, ir.opcode, mnemonic, ir.rs, ir.rt, ir.rd);
 }
 
 void destroy() {

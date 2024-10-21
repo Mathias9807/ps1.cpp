@@ -133,6 +133,12 @@ void jr(reg address) {
 	npc = registers[address];
 }
 
+void jalr(reg link, reg address) {
+	registers[link] = pc + 8;
+	pc = npc;
+	npc = registers[address];
+}
+
 // Branches
 void beq(reg rs, reg rt, int16_t offs) {
 	if (registers[rs] == registers[rt]) incr_pc(offs << 2);
