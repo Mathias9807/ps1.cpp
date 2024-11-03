@@ -192,59 +192,58 @@ void lui(reg rt, uint32_t imm) {
 
 void lw(reg rt, reg rs, int16_t offset) {
 	// Ignore all reads when Isolate Cache is high
-	if ((status & (1 << 16)) == 0)
+	if (!status.isc)
 		registers[rt] = read_memory(registers[rs] + offset, 4);
 	incr_pc(4);
 }
 
 void lh(reg rt, reg rs, int16_t offset) {
 	// Ignore all reads when Isolate Cache is high
-	if ((status & (1 << 16)) == 0)
+	if (!status.isc)
 		registers[rt] = (int16_t) read_memory(registers[rs] + offset, 2);
 	incr_pc(4);
 }
 
 void lb(reg rt, reg rs, int16_t offset) {
 	// Ignore all reads when Isolate Cache is high
-	if ((status & (1 << 16)) == 0)
+	if (!status.isc)
 		registers[rt] = (int8_t) read_memory(registers[rs] + offset, 1);
 	incr_pc(4);
 }
 
 void lbu(reg rt, reg rs, int16_t offset) {
 	// Ignore all reads when Isolate Cache is high
-	if ((status & (1 << 16)) == 0)
+	if (!status.isc)
 		registers[rt] = (uint8_t) read_memory(registers[rs] + offset, 1);
 	incr_pc(4);
 }
 
 void sw(reg rt, reg rs, int16_t offset) {
 	// Ignore all writes when Isolate Cache is high
-	if ((status & (1 << 16)) == 0)
+	if (!status.isc)
 		write_memory(registers[rs] + offset, registers[rt], 4);
 	incr_pc(4);
 }
 
 void sh(reg rt, reg rs, int32_t offset) {
 	// Ignore all writes when Isolate Cache is high
-	if ((status & (1 << 16)) == 0)
+	if (!status.isc)
 		write_memory(registers[rs] + offset, registers[rt], 2);
 	incr_pc(4);
 }
 
 void sb(reg rt, reg rs, int32_t offset) {
 	// Ignore all writes when Isolate Cache is high
-	if ((status & (1 << 16)) == 0)
+	if (!status.isc)
 		write_memory(registers[rs] + offset, registers[rt], 1);
 	incr_pc(4);
 }
 
 // Misc
 void syscall() {
-	cause = (cause & ~0b11111100) | (8 << 2);
+	cause.excode = 0x08;
 	printf("syscall\n");
-	quit = 1;
-	incr_pc(4);
+	exception();
 }
 
 void mfhi(reg rd) {
@@ -257,13 +256,13 @@ void mflo(reg rd) {
 	incr_pc(4);
 }
 
-void mthi(reg rd) {
-	hi = registers[rd];
+void mthi(reg rs) {
+	hi = registers[rs];
 	incr_pc(4);
 }
 
-void mtlo(reg rd) {
-	lo = registers[rd];
+void mtlo(reg rs) {
+	lo = registers[rs];
 	incr_pc(4);
 }
 
@@ -291,7 +290,7 @@ void sltiu(reg rd, reg rs, int16_t imm) {
 
 void mtc(char coproc, reg rt, reg rd) {
 	if (coproc == 0 && rd == 12) {
-		status = registers[rt];
+		*(uint32_t*) &status = registers[rt];
 
 	}else if (coproc == 0 && rd == 7) {
 		if (registers[rt]) {
@@ -316,7 +315,14 @@ void mtc(char coproc, reg rt, reg rd) {
 	}else if (coproc == 0 && rd == 11) {
 		bpcm = registers[rt];
 	}else if (coproc == 0 && rd == 13) {
-		cause = (cause & 0b110000000) | (registers[rt] & 0b110000000);
+		if (registers[rt] & 0b11) {
+			printf("Cause.InterruptPending field set high\n");
+			quit = 1;
+		}
+
+		cause.ip = (cause.ip & ~0b11) | (registers[rt] & 0b11);
+	}else if (coproc == 0 && rd == 14) {
+		epc = registers[rt];
 	}else if (coproc == 0 && rd == 6) {
 		printf("Write to read-only register 6 of coproc 0, data %#x\n", registers[rt]);
 
@@ -329,17 +335,29 @@ void mtc(char coproc, reg rt, reg rd) {
 void mfc(char coproc, reg rt, reg rd) {
 	if (coproc == 0 && rd == 12) {
 		printf("Read from status register\n");
-		registers[rt] = status;
+		registers[rt] = *(uint32_t*) &status;
 	}else if (coproc == 0 && rd == 7) {
 		registers[rt] = dcic;
 	}else if (coproc == 0 && rd == 3) {
 		registers[rt] = bpc;
 	}else if (coproc == 0 && rd == 5) {
 		registers[rt] = bda;
-	}else if (coproc == 0 && rd == 13) {
+	}else if (coproc == 0 && rd == 9) {
 		registers[rt] = bda;
+	}else if (coproc == 0 && rd == 13) {
+		registers[rt] = *(uint32_t*) &cause;
+	}else if (coproc == 0 && rd == 14) {
+		registers[rt] = epc;
 	}else {
 		printf("Uncaught read from coproc %d, register %zu\n", coproc, rd);
 		exit(-1);
 	}
+}
+
+void rfe() {
+	status.iec = status.iep;
+	status.kuc = status.kup;
+
+	status.iep = status.ieo;
+	status.kup = status.kuo;
 }

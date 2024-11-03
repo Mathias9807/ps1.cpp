@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common.h"
+#include "dma.h"
 #include <cstdint>
 
 typedef size_t reg;
@@ -33,12 +34,52 @@ typedef struct {
 	uint32_t address : 26;
 	uint8_t opcode : 6;
 } ins_j;
+
+typedef struct {
+	bool iec : 1;
+	bool kuc : 1;
+	bool iep : 1;
+	bool kup : 1;
+	bool ieo : 1;
+	bool kuo : 1;
+	unsigned unused : 2;
+	unsigned im : 8;
+	bool isc : 1;
+	bool swc : 1;
+	bool pz : 1;
+	bool cm : 1;
+	bool pe : 1;
+	bool ts : 1;
+	bool bev : 1;
+	unsigned unused2 : 2;
+	bool re : 1;
+	unsigned unused3 : 2;
+	bool cu0 : 1;
+	bool cu1 : 1;
+	bool cu2 : 1;
+	bool cu3 : 1;
+} sr_t;
+typedef struct {
+	unsigned unused : 2;
+	unsigned excode : 5;
+
+	bool unused2 : 1;
+	unsigned ip : 8;
+
+	unsigned unused3 : 12;
+	unsigned ce : 2;
+
+	bool unused4 : 1;
+	bool bd : 1;
+} cause_t;
 #pragma pack(pop)
 
 extern uint32_t pc, npc;
 extern uint32_t hi, lo;
 extern uint32_t registers[N_REGISTERS];
-extern uint32_t status, dcic, bpc, bda, bdam, bpc, bpcm, cause;
+extern sr_t	status;
+extern cause_t	cause;
+extern uint32_t dcic, bpc, bda, bdam, bpc, bpcm, epc;
 extern uint16_t volumeLeft, volumeRight, reverbVolumeLeft, reverbVolumeRight;
 extern uint32_t irq_stat, irq_mask;
 
@@ -55,6 +96,20 @@ void* find_memory(uint32_t address);
 bool try_xlr8();
 void print_state();
 
+void exception();
+void interrupt(int source);
+
+#define IRQ_VBLANK	0
+#define IRQ_GPU		1
+#define IRQ_CDROM	2
+#define IRQ_DMA		3
+#define IRQ_TMR0	4
+#define IRQ_TMR1	5
+#define IRQ_TMR2	6
+#define IRQ_CONTROLLER	7
+#define IRQ_SIO		8
+#define IRQ_SPU		9
+#define IRQ_LIGHTPEN	10
 
 #pragma pack(push)
 #pragma pack(1)

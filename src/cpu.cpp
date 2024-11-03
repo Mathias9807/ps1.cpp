@@ -23,7 +23,9 @@ char* biosData;
 uint32_t pc, npc;
 uint32_t hi, lo;
 uint32_t registers[N_REGISTERS];
-uint32_t status, dcic, bpc, bpcm, bda, bdam, cause;
+sr_t     status;
+cause_t  cause;
+uint32_t dcic, bpc, bpcm, bda, bdam, epc;
 uint16_t volumeLeft, volumeRight, reverbVolumeLeft, reverbVolumeRight;
 uint32_t irq_stat, irq_mask;
 
@@ -41,10 +43,10 @@ void init() {
 	biosData = (char*) calloc(BIOS_SIZE, sizeof(char));
 
 	memset(registers, 0, N_REGISTERS * sizeof(uint32_t));
-	hi = lo = status = 0;
+	hi = lo = *(uint32_t*) &status = 0;
 	pc = 0x1FC00000;
 	npc = pc + 4;
-	status = dcic = bpc = bpcm = bda = bdam = cause = 0;
+	*(uint32_t*) &status = dcic = bpc = bpcm = bda = bdam = epc = *(uint32_t*) &cause = 0;
 
 	char biosFile[] = "./SCPH-5501.BIN";
 	FILE* bios = fopen(biosFile, "rn");
@@ -113,6 +115,14 @@ uint32_t read_memory(uint32_t address, int num_bytes) {
 			&& num_bytes == 4) {
 		int timer = local_addr / 0x10 & 0x3;
 		return get_timer_mode(timer);
+
+	}else if ((local_addr >= 0x801080 && local_addr <= 0x8010F4) && num_bytes == 4) {
+		return read_dma_io(address);
+
+	}else if (local_addr == 0x801070) {
+		print_word("Reading I_STAT", irq_stat);
+		return irq_stat;
+
 	}
 
 
@@ -124,7 +134,7 @@ uint32_t read_memory(uint32_t address, int num_bytes) {
 
 void write_memory(uint32_t address, uint32_t data, int num_bytes) {
 	// Ignore all writes when Isolate Cache is high
-	if (status & (1 << 16)) return;
+	if (status.isc) return;
 
 	int mode = -1;
 	if (address >> 24 == 0x00 || address >> 24 == 0x1F) mode = 0;
@@ -247,7 +257,12 @@ void write_memory(uint32_t address, uint32_t data, int num_bytes) {
 		}
 
 	}else if (local_addr == 0x801070) {
-		if (data == 0) irq_stat = 0;
+		// Clear cause.InterruptPending if the current interrupt is set low
+		if ((irq_stat & irq_mask) && !(data & irq_mask))
+			cause.ip = 0;
+
+		print_word("Writing I_STAT", data);
+		irq_stat &= data;
 
 	}else if (local_addr == 0x801100 || local_addr == 0x801110 || local_addr == 0x801120) {
 		printf("TIMER: Setting timer counter %d to %d\n", local_addr / 0x10 & 0x3, data);
@@ -259,6 +274,9 @@ void write_memory(uint32_t address, uint32_t data, int num_bytes) {
 	}else if (local_addr == 0x801108 || local_addr == 0x801118 || local_addr == 0x801128) {
 		printf("TIMER: Setting target %d to %d\n", local_addr / 0x10 & 0x3, data);
 		timer_target[local_addr / 0x10 & 0x3] = data;
+
+	}else if ((local_addr >= 0x801080 && local_addr <= 0x8010F4) && num_bytes == 4) {
+		write_dma_io(address, data);
 
 	}else {
 		printf("uncaught write oooh noooooo %#x, data=%#x (%d)\n", address, data, data);
@@ -287,6 +305,46 @@ void* find_memory(uint32_t address) {
 	}
 
 	return NULL;
+}
+
+// Exceptions are all events that rip control flow from the program. The instruction where
+// the exception happened is stored in epc and cause should be written to its register
+void exception() {
+	// Missing:
+	// R3000 documentation says that on an exception: "the pre-existing user-mode and interrupt-enable flags in SR are saved by pushing the 3-entry stack inside SR, and changing to kernel mode with interrupts disabled."
+	// Cause is setup so that software can see the reason for the exception. On address exceptions BadVaddr is also set. Memory management system exceptions set up some of the MMU registers too; see the chapter on memory management for more detail
+
+	// Push kernel-mode/interrupt-enable bits in status register stack
+	status.kuo = status.kup;
+	status.ieo = status.iep;
+	status.kup = status.kuc;
+	status.iep = status.iec;
+
+	// Set cause.bd if in delay slot
+	if (npc != pc + 4) cause.bd = 1;
+
+	// Set epc to address exception occurred at (or the instr before if in delay slot)
+	epc = pc + (cause.bd ? -4 : 0);
+
+	uint32_t exceptionVecAddr = status.bev ? 0xBFC00180 : 0x80000080;
+
+	pc = exceptionVecAddr;
+	npc = pc + 4;
+}
+
+// Interrupts are exceptions raised by external devices instead of internal state. They
+// can be disabled with sr.IEc or with the interrupt mask register.
+void interrupt(int source) {
+	if ((irq_mask & (1 << source)) == 0) return;
+
+	irq_stat |= 1 << source; // Set current interrupt signal to high
+
+	// Refer to: https://psx-spx.consoledev.net/interrupts/#1f801070h-i_stat-interrupt-status-register-rstatus-wacknowledge
+	cause.ip |= 0b100;
+	if (status.iec == 0 || (status.im & 0b100) == 0) return;
+
+	cause.excode = 0x00; // Interrupt
+	exception();
 }
 
 void catch_unknown_ins(uint32_t instruction);
@@ -318,7 +376,7 @@ int tick() {
 	// Co-proc instructions
 	char coproc = opcode & 0b11;
 
-	if (tick_count > 101398 + 0x11111111) print_instruction(pc);
+	if (tick_count > 1500000) print_instruction(pc);
 
 	// BPA Break handling
 	if (dcic & DCIC_BPC && ((address ^ bpc) & bpcm) == 0) {
@@ -356,9 +414,9 @@ int tick() {
 			case 0b001001:
 				jalr(rd, rs);
 				break;
-			// case 0b001100:
-			// 	syscall();
-			// 	break;
+			case 0b001100:
+				syscall();
+				break;
 			case 0b001101:
 				printf("break\n");
 				exit(-1);
@@ -366,8 +424,14 @@ int tick() {
 			case 0b010000:
 				mfhi(rd);
 				break;
+			case 0b010001:
+				mthi(rs);
+				break;
 			case 0b010010:
 				mflo(rd);
+				break;
+			case 0b010011:
+				mtlo(rs);
 				break;
 			case 0b011000:
 				mult(rs, rt);
@@ -498,7 +562,15 @@ int tick() {
 		case 0b010011:
 			if (rs == 0b00100) mtc(coproc, rt, rd);
 			else if (rs == 0b00000) mfc(coproc, rt, rd);
-			else print_word("uncaught coproc instruction", instruction);
+			else if (opcode == 0b010000 && rs == 0b10000
+				 && !rt && !rd && funct == 0b010000) {
+				rfe();
+
+			}else {
+				print_word("uncaught coproc instruction", instruction);
+				catch_unknown_ins(instruction);
+				quit = 1;
+			}
 			incr_pc(4);
 			break;
 		case 0b100000:

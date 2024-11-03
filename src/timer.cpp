@@ -11,6 +11,7 @@ uint32_t timer_target[3];
 void setIrqReq(int timer, int req) {
 	if (req == 0 && timer_mode[timer].irqReq == 1) {
 		// Interrupt!
+		interrupt(IRQ_TMR0 + timer);
 	}
 
 	timer_mode[timer].irqReq = req;
