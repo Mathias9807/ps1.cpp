@@ -120,6 +120,8 @@ void print_instruction(uint32_t address) {
 		case 0b101010: case 0b101011: case 0b100010: case 0b100011: case 0b100110: // <ins> rd rs rt instructions
 			printf("%#x\t%s r%d, r%d, r%d\n", pc, mnemonic, ir.rd, ir.rs, ir.rt);
 			return;
+		case 0b010001:
+		case 0b010011:
 		case 0b001000: // <ins> rs instructions
 			printf("%#x\t%s r%d\n", pc, mnemonic, ir.rs);
 			return;
@@ -132,6 +134,13 @@ void print_instruction(uint32_t address) {
 		case 0b000000: // <ins> rd rt sa instructions
 			printf("%#x\t%s r%d, r%d, %d\n", pc, mnemonic, ir.rd, ir.rt, ir.shamt);
 			return;
+		case 0b001100: // <ins> instructions
+			printf("%#x\t%s\n", pc, mnemonic);
+			return;
+		case 0b010010:
+		case 0b010000: // <ins> rd instructions
+			printf("%#x\t%s r%d\n", pc, mnemonic, ir.rd);
+			return;
 		}
 	}
 	uint32_t next, prev; ins_i next_ins, prev_ins;
@@ -141,14 +150,21 @@ void print_instruction(uint32_t address) {
 		case 0b000011:
 			printf("%#x\t%s %#x\n", pc, mnemonic, ij.address << 2);
 			return;
+		case 0b001000:
 		case 0b001010:
-		case 0b001011:
+		case 0b001011: // Decimal constants
 			printf("%#x\t%s r%d, r%d (%d), %#x (%d)\n", pc, mnemonic, ii.rt, ii.rs, registers[ii.rs], ii.immediate, ii.immediate);
+			return;
+		case 0b001100: // Hexadecimal constants
+			printf("%#x\t%s r%d, r%d (%#x), %#x (%d)\n", pc, mnemonic, ii.rt, ii.rs, registers[ii.rs], ii.immediate, ii.immediate);
 			return;
 		case 0b000001:
 		case 0b000110:
 		case 0b000111:
 			printf("%#x\t%s r%d (%d), %#x\n", pc, mnemonic, ii.rs, registers[ii.rs], pc + (int16_t) ii.immediate*4);
+			return;
+		case 0b000101:
+			printf("%#x\t%s r%d (%d), r%d (%d), %#x\n", pc, mnemonic, ii.rs, registers[ii.rs], ii.rt, registers[ii.rt], pc + (int16_t) ii.immediate*4);
 			return;
 		case 0b001111:
 
@@ -161,8 +177,8 @@ void print_instruction(uint32_t address) {
 			}else
 				printf("%#x\t%s r%d, %#x\n", pc, mnemonic, ii.rt, ii.immediate);
 			return;
-		case 0b001101:
 		case 0b001001:
+		case 0b001101:
 			if (opcode == 0b001101) {
 				// Don't print anything if in `li` macro
 				prev = read_memory(pc - 4, 4);
@@ -170,7 +186,7 @@ void print_instruction(uint32_t address) {
 				if (prev_ins.opcode == 0b001111)
 					printf("%#x\n", pc);
 				else
-					printf("%#x\t%s r%d, r%d, %#x\n", pc, mnemonic, ii.rt, ii.rs, ii.immediate);
+					printf("%#x\t%s r%d, r%d (%#x), %#x (%d)\n", pc, mnemonic, ii.rt, ii.rs, ii.rs, ii.immediate, ii.immediate);
 			}else if (opcode == 0b001001) // addiu
 				printf("%#x\t%s r%d, r%d (%d), %#x (%d)\n", pc, mnemonic, ii.rt, ii.rs, registers[ii.rs], ii.immediate, (int16_t) ii.immediate);
 			else
@@ -183,8 +199,11 @@ void print_instruction(uint32_t address) {
 				printf("%#x\tmtc coproc%dr%d, r%d (%#x)\n", pc, opcode & 0b11, ir.rd, ir.rt, registers[ir.rt]);
 			else if (!ir.rs)
 				printf("%#x\tmfc coproc%dr%d, r%d\n", pc, opcode & 0b11, ir.rd, ir.rt);
+			else if (instruction == ((0b010000 << 26) | (1 << 25) | 0b010000))
+				printf("%#x\trfe\n", pc);
 			else {
 				printf("Unknown coprocessor instruction!!\n");
+				print_word("Instruction:", instruction);
 				exit(-1);
 			}
 			return;
